@@ -5,6 +5,7 @@
 ## 概要
 
 - `roof-layout.html`：計算アプリ本体
+- `readme.html`：スマホでも読みやすい使い方ページ
 - `manifest.webmanifest`：PWA 用マニフェスト
 - `sw.js`：オフラインキャッシュ用サービスワーカー
 - `roof-icon.svg`：アプリアイコン
@@ -40,6 +41,8 @@
 
 - `roof-layout.html`
   - 入力 UI、結果表示、計算ロジックを含む単一ページアプリ
+- `readme.html`
+  - スマホから確認しやすい使い方ページ
 - `manifest.webmanifest`
   - PWA の名称、アイコン、テーマカラーなどを定義
 - `sw.js`

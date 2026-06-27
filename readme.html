@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2f765c">
+  <title>使い方 - 屋根割付</title>
+  <style>
+    :root {
+      --bg: #f3f5f1;
+      --ink: #1f2a25;
+      --muted: #64706a;
+      --panel: #ffffff;
+      --line: #cfd8d2;
+      --strong: #2f765c;
+      --strong-dark: #245c48;
+      --soft: #e8efe9;
+      --shadow: rgba(31, 42, 37, .12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", Meiryo, system-ui, sans-serif;
+      background: var(--bg);
+    }
+
+    main {
+      width: min(820px, 100%);
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    header {
+      margin-bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: end;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .sub {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.6;
+    }
+
+    .backLink {
+      min-height: 48px;
+      padding: 0 16px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      background: var(--strong);
+      font-size: 15px;
+      font-weight: 900;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .backLink:hover,
+    .backLink:focus-visible {
+      background: var(--strong-dark);
+      outline: 3px solid rgba(47, 118, 92, .18);
+      outline-offset: 2px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      background: var(--panel);
+      box-shadow: 0 10px 26px var(--shadow);
+    }
+
+    section + section {
+      margin-top: 18px;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 20px;
+      line-height: 1.35;
+    }
+
+    p,
+    li {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.75;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    ul,
+    ol {
+      margin: 0;
+      padding-left: 1.35em;
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: var(--soft);
+      font-family: Consolas, "Courier New", monospace;
+      font-size: .95em;
+    }
+
+    @media (max-width: 680px) {
+      main {
+        padding: 12px;
+      }
+
+      header {
+        display: block;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+
+      .sub {
+        font-size: 14px;
+      }
+
+      .backLink {
+        width: 100%;
+        margin-top: 12px;
+      }
+
+      .panel {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>使い方</h1>
+        <p class="sub">屋根材の左右均等割付、必要枚数、キャップ数、けがき寸法を確認するための説明ページです。</p>
+      </div>
+      <a class="backLink" href="roof-layout.html">計算へ戻る</a>
+    </header>
+
+    <section class="panel">
+      <h2>概要</h2>
+      <p>働き幅 333mm の屋根材を左右均等に割付し、必要枚数、キャップ数、けがき寸法を計算します。</p>
+    </section>
+
+    <section class="panel">
+      <h2>使い方</h2>
+      <ol>
+        <li><code>屋根の横幅 W</code> を入力します。</li>
+        <li><code>働き幅</code>、<code>理想の端幅</code>、<code>最小端幅</code>、<code>最大端幅</code> を必要に応じて変更します。</li>
+        <li>計算結果は自動で更新されます。</li>
+        <li><code>コピー</code> ボタンで結果をクリップボードへ保存できます。</li>
+        <li><code>印刷</code> ボタンで A4 印刷プレビューを表示できます。</li>
+      </ol>
+    </section>
+
+    <section class="panel">
+      <h2>見方</h2>
+      <ul>
+        <li><code>おすすめ端幅</code> は左右に入る同じ寸法です。</li>
+        <li><code>中央の定尺枚数</code> は働き幅のまま使う枚数です。</li>
+        <li><code>必要枚数</code> は中央材と端部用を含めた枚数です。</li>
+        <li><code>キャップ数</code> は材どうしの境界数です。</li>
+        <li><code>けがき位置</code> は割付位置から右へ 25mm ずらした位置です。</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>注意点</h2>
+      <ul>
+        <li>端幅が 140mm 以下の場合は、端部材を 1 枚で取り合わせます。</li>
+        <li>端幅が 140mm を超える場合は、端部用として 2 枚追加します。</li>
+        <li>サービスワーカーは <code>file://</code> では登録されません。HTTPS または localhost 上で有効になります。</li>
+        <li>入力値に不正がある場合は、計算結果に入力確認が表示されます。</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

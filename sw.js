@@ -1,7 +1,8 @@
-const CACHE_NAME = 'roof-layout-v2';
+const CACHE_NAME = 'roof-layout-v3';
 const APP_FILES = [
   './',
   './roof-layout.html',
+  './readme.html',
   './manifest.webmanifest',
   './roof-icon.svg'
 ];
