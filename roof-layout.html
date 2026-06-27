@@ -100,7 +100,7 @@
 
     input {
       width: 100%;
-      min-height: 44px;
+      min-height: 48px;
       border: 1px solid #b9c4bd;
       border-radius: 6px;
       padding: 8px 11px;
@@ -128,7 +128,7 @@
     }
 
     button {
-      min-height: 44px;
+      min-height: 48px;
       border: 0;
       border-radius: 6px;
       padding: 0 14px;
@@ -347,13 +347,113 @@
     }
 
     @media (max-width: 940px) {
-      main { padding: 14px; }
+      main { padding: 12px; }
       header { display: block; }
+      h1 { font-size: 28px; }
+      .sub { font-size: 14px; }
       .app { grid-template-columns: 1fr; }
       .inputs { position: static; }
-      .summary { grid-template-columns: 1fr; }
+      .summary {
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        padding: 8px;
+        border-radius: 0 0 8px 8px;
+      }
+      .metric {
+        min-height: 82px;
+        padding: 9px;
+      }
+      .metric span,
+      .metric small {
+        font-size: 11px;
+      }
+      .metric strong {
+        font-size: 24px;
+      }
+      .metric:nth-child(4),
+      .metric:nth-child(5) {
+        grid-column: span 3;
+        min-height: 58px;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        column-gap: 12px;
+      }
+      .metric:nth-child(4) small,
+      .metric:nth-child(5) small {
+        grid-column: 1 / -1;
+      }
       .grid2 { grid-template-columns: 1fr; }
-      th, td { padding: 11px 7px; font-size: 12px; }
+      .actions {
+        grid-template-columns: 1fr 72px 56px;
+      }
+      .ghost {
+        width: auto;
+      }
+      .visual {
+        padding: 14px;
+      }
+      .roofbar {
+        height: 92px;
+      }
+      table,
+      thead,
+      tbody,
+      tr,
+      th,
+      td {
+        display: block;
+      }
+      thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+      tr {
+        margin: 8px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fbfcfb;
+        overflow: hidden;
+      }
+      tr.best {
+        border-color: rgba(47, 118, 92, .45);
+        background: #edf6ef;
+      }
+      tr.best td {
+        background: transparent;
+      }
+      td {
+        min-height: 42px;
+        padding: 9px 12px;
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        text-align: right;
+        white-space: normal;
+        font-size: 14px;
+        font-weight: 800;
+      }
+      td:last-child {
+        border-bottom: 0;
+      }
+      td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+        text-align: left;
+      }
+      .markingTable td:nth-child(4) {
+        border-left: 0;
+        border-top: 2px solid var(--line);
+      }
       .hide-sm { display: none; }
     }
 
@@ -524,7 +624,7 @@
           </label>
         </div>
         <div class="actions">
-          <button id="copyBtn" type="button">計算結果をコピー</button>
+          <button id="copyBtn" type="button">コピー</button>
           <button class="ghost" id="printBtn" type="button" aria-label="A4印刷">印刷</button>
           <button class="ghost" id="resetBtn" type="button" aria-label="初期値に戻す">↺</button>
         </div>
@@ -642,6 +742,8 @@
       maxEdge: 260
     };
 
+    const storageKey = 'roof-layout-inputs';
+
     let currentMarkings = [];
 
     function mm(value) {
@@ -650,6 +752,30 @@
 
     function numberOf(input) {
       return Number.parseFloat(input.value);
+    }
+
+    function saveInputs() {
+      try {
+        const values = Object.fromEntries(
+          Object.keys(defaults).map((key) => [key, el[key].value])
+        );
+        localStorage.setItem(storageKey, JSON.stringify(values));
+      } catch {
+        // 保存できないブラウザ設定でも計算はそのまま使えるようにする。
+      }
+    }
+
+    function loadSavedInputs() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey));
+        if (!saved) return;
+
+        Object.keys(defaults).forEach((key) => {
+          if (saved[key] !== undefined) el[key].value = saved[key];
+        });
+      } catch {
+        localStorage.removeItem(storageKey);
+      }
     }
 
     function makeCandidate(full, width, work, ideal, minEdge, maxEdge) {
@@ -731,12 +857,12 @@
         const right = markings[i + 1];
         const row = document.createElement('tr');
         row.innerHTML = `
-          <td>${left.number}</td>
-          <td>${mm(left.layoutPosition)}</td>
-          <td>${mm(left.markingPosition)}</td>
-          <td>${right ? right.number : ''}</td>
-          <td>${right ? mm(right.layoutPosition) : ''}</td>
-          <td>${right ? mm(right.markingPosition) : ''}</td>
+          <td data-label="番号">${left.number}</td>
+          <td data-label="割付位置">${mm(left.layoutPosition)}</td>
+          <td data-label="けがき位置">${mm(left.markingPosition)}</td>
+          <td data-label="番号">${right ? right.number : ''}</td>
+          <td data-label="割付位置">${right ? mm(right.layoutPosition) : ''}</td>
+          <td data-label="けがき位置">${right ? mm(right.markingPosition) : ''}</td>
         `;
         el.markingRows.append(row);
       }
@@ -792,14 +918,14 @@
         const row = document.createElement('tr');
         if (index === 0) row.className = 'best';
         row.innerHTML = `
-          <td>${index === 0 ? 'おすすめ' : '第2プラン'}</td>
-          <td>${mm(candidate.edge)}</td>
-          <td>${candidate.full}枚</td>
-          <td>${mm(candidate.edge)}</td>
-          <td>${candidate.requiredSheets}枚</td>
-          <td>${candidate.capCount}個</td>
-          <td class="hide-sm">${mm(candidate.diff)}</td>
-          <td><span class="badge ${candidate.inRange ? '' : 'warn'}">${candidate.inRange ? 'OK' : '範囲外'}</span></td>
+          <td data-label="候補">${index === 0 ? 'おすすめ' : '第2プラン'}</td>
+          <td data-label="左端">${mm(candidate.edge)}</td>
+          <td data-label="定尺">${candidate.full}枚</td>
+          <td data-label="右端">${mm(candidate.edge)}</td>
+          <td data-label="必要枚数">${candidate.requiredSheets}枚</td>
+          <td data-label="キャップ">${candidate.capCount}個</td>
+          <td class="hide-sm" data-label="理想差">${mm(candidate.diff)}</td>
+          <td data-label="判定"><span class="badge ${candidate.inRange ? '' : 'warn'}">${candidate.inRange ? 'OK' : '範囲外'}</span></td>
         `;
         el.candidateRows.append(row);
       });
@@ -827,6 +953,7 @@
     document.querySelectorAll('input').forEach((input) => {
       input.addEventListener('input', () => {
         el.copyStatus.textContent = '';
+        saveInputs();
         render();
       });
     });
@@ -835,6 +962,7 @@
       Object.entries(defaults).forEach(([key, value]) => {
         el[key].value = value;
       });
+      saveInputs();
       el.copyStatus.textContent = '';
       render();
     });
@@ -858,6 +986,7 @@
       });
     }
 
+    loadSavedInputs();
     render();
   </script>
 </body>
