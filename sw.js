@@ -1,6 +1,7 @@
 const CACHE_NAME = 'roof-layout-v3';
 const APP_FILES = [
   './',
+  './index.html',
   './roof-layout.html',
   './readme.html',
   './manifest.webmanifest',
