@@ -1,0 +1,18 @@
+{
+  "name": "屋根材 左右均等割付計算",
+  "short_name": "屋根割付",
+  "description": "働き幅333mmの屋根材を左右均等に割付し、必要枚数、キャップ数、けがき寸法を計算します。",
+  "start_url": "./roof-layout.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f5f1",
+  "theme_color": "#2f765c",
+  "icons": [
+    {
+      "src": "./roof-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
