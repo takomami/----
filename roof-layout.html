@@ -120,7 +120,8 @@
       font-weight: 800;
     }
 
-    input {
+    input,
+    select {
       width: 100%;
       min-height: 48px;
       border: 1px solid #b9c4bd;
@@ -131,7 +132,12 @@
       font: 800 20px/1.1 system-ui, sans-serif;
     }
 
-    input:focus {
+    select {
+      appearance: none;
+    }
+
+    input:focus,
+    select:focus {
       outline: 3px solid rgba(47, 118, 92, .18);
       border-color: var(--strong);
     }
@@ -650,12 +656,26 @@
             <input id="maxEdge" type="number" inputmode="decimal" min="0" step="1" value="260">
           </label>
         </div>
+        <div class="grid2">
+          <label>
+            固定する端
+            <select id="fixedEdgeMode">
+              <option value="none">固定なし</option>
+              <option value="left">左端を固定</option>
+              <option value="right">右端を固定</option>
+            </select>
+          </label>
+          <label>
+            固定端幅
+            <input id="fixedEdge" type="number" inputmode="decimal" min="0" step="1" value="150">
+          </label>
+        </div>
         <div class="actions">
           <button id="copyBtn" type="button">コピー</button>
           <button class="ghost" id="printBtn" type="button" aria-label="A4印刷">印刷</button>
           <button class="ghost" id="resetBtn" type="button" aria-label="初期値に戻す">↺</button>
         </div>
-        <p class="hint">計算式: 左右端幅 = (屋根横幅 - 中央に入れる定尺枚数 × 働き幅) ÷ 2。中央に1枚割りこませる案と、割りこませない案の2つだけを比べます。</p>
+        <p class="hint">固定なしは、左右端幅 = (屋根横幅 - 中央に入れる定尺枚数 × 働き幅) ÷ 2。左端または右端を固定した場合は、屋根横幅から固定端幅と定尺分を引いた残りを反対側の端幅として計算します。</p>
       </section>
 
       <section class="results" aria-label="計算結果">
@@ -663,7 +683,7 @@
           <div class="metric">
             <span>おすすめ端幅</span>
             <strong id="bestEdge">-</strong>
-            <small>左右同寸法</small>
+            <small id="edgeModeNote">左右同寸法</small>
           </div>
           <div class="metric">
             <span>中央の定尺枚数</span>
@@ -697,7 +717,7 @@
         </section>
 
         <section class="panel list">
-          <h2 class="sectionTitle">おすすめ・第2プラン</h2>
+          <h2 class="sectionTitle">候補プラン</h2>
           <table>
             <thead>
               <tr>
@@ -743,7 +763,10 @@
       idealEdge: document.querySelector('#idealEdge'),
       minEdge: document.querySelector('#minEdge'),
       maxEdge: document.querySelector('#maxEdge'),
+      fixedEdgeMode: document.querySelector('#fixedEdgeMode'),
+      fixedEdge: document.querySelector('#fixedEdge'),
       bestEdge: document.querySelector('#bestEdge'),
+      edgeModeNote: document.querySelector('#edgeModeNote'),
       bestFull: document.querySelector('#bestFull'),
       bestRequired: document.querySelector('#bestRequired'),
       bestCaps: document.querySelector('#bestCaps'),
@@ -766,7 +789,9 @@
       workWidth: 333,
       idealEdge: 150,
       minEdge: 90,
-      maxEdge: 260
+      maxEdge: 260,
+      fixedEdgeMode: 'none',
+      fixedEdge: 150
     };
 
     const storageKey = 'roof-layout-inputs';
@@ -805,32 +830,76 @@
       }
     }
 
-    function makeCandidate(full, width, work, ideal, minEdge, maxEdge) {
+    function rangePenalty(value, minEdge, maxEdge) {
+      if (value >= minEdge && value <= maxEdge) return 0;
+      return 10000 + Math.min(Math.abs(value - minEdge), Math.abs(value - maxEdge));
+    }
+
+    function countEdgeSheets(leftEdge, rightEdge) {
       const nestingLimit = 140;
-      const edge = (width - full * work) / 2;
-      const inRange = edge >= minEdge && edge <= maxEdge;
-      const diff = Math.abs(edge - ideal);
-      const balancePenalty = inRange ? 0 : 10000 + Math.min(Math.abs(edge - minEdge), Math.abs(edge - maxEdge));
-      const edgeSheetCount = edge <= 0 ? 0 : edge <= nestingLimit ? 1 : 2;
+      const edges = [leftEdge, rightEdge].filter((edge) => edge > 0);
+      const smallEdgeCount = edges.filter((edge) => edge <= nestingLimit).length;
+      const largeEdgeCount = edges.length - smallEdgeCount;
+
+      return largeEdgeCount + (smallEdgeCount > 0 ? 1 : 0);
+    }
+
+    function makeCandidate(full, width, work, ideal, minEdge, maxEdge, leftEdge, rightEdge, fixedMode) {
+      const inRange = leftEdge >= minEdge && leftEdge <= maxEdge && rightEdge >= minEdge && rightEdge <= maxEdge;
+      const freeEdge = fixedMode === 'left' ? rightEdge : fixedMode === 'right' ? leftEdge : leftEdge;
+      const diff = fixedMode === 'none'
+        ? Math.abs(leftEdge - ideal)
+        : Math.abs(freeEdge - ideal);
+      const edgeSheetCount = countEdgeSheets(leftEdge, rightEdge);
       const requiredSheets = full + edgeSheetCount;
-      const capCount = edge > 0 ? full + 1 : Math.max(0, full - 1);
+      const pieceCount = full + [leftEdge, rightEdge].filter((edge) => edge > 0).length;
+      const capCount = Math.max(0, pieceCount - 1);
 
       return {
         full,
-        edge,
+        edge: fixedMode === 'none' ? leftEdge : freeEdge,
+        leftEdge,
+        rightEdge,
         diff,
         inRange,
+        fixedMode,
         edgeSheetCount,
         requiredSheets,
         capCount,
-        score: diff + balancePenalty
+        score: diff + rangePenalty(leftEdge, minEdge, maxEdge) + rangePenalty(rightEdge, minEdge, maxEdge)
       };
     }
 
     function buildCandidates(width, work, ideal, minEdge, maxEdge) {
       const maxFull = Math.floor(width / work);
       const fullCounts = [...new Set([maxFull, Math.max(0, maxFull - 1)])];
-      const candidates = fullCounts.map((full) => makeCandidate(full, width, work, ideal, minEdge, maxEdge));
+      const candidates = fullCounts.map((full) => {
+        const edge = (width - full * work) / 2;
+        return makeCandidate(full, width, work, ideal, minEdge, maxEdge, edge, edge, 'none');
+      });
+
+      return candidates.sort((a, b) => a.score - b.score || b.full - a.full);
+    }
+
+    function buildFixedCandidates(width, work, ideal, minEdge, maxEdge, fixedMode, fixedEdge) {
+      const available = width - fixedEdge;
+      const maxFull = Math.floor(available / work);
+      const targetFull = Math.round((available - ideal) / work);
+      const fullCounts = [...new Set([
+        maxFull,
+        Math.max(0, maxFull - 1),
+        Math.max(0, targetFull - 1),
+        Math.max(0, targetFull),
+        Math.max(0, targetFull + 1)
+      ])].filter((full) => full >= 0);
+
+      const candidates = fullCounts.map((full) => {
+        const freeEdge = width - fixedEdge - full * work;
+        const leftEdge = fixedMode === 'left' ? fixedEdge : freeEdge;
+        const rightEdge = fixedMode === 'right' ? fixedEdge : freeEdge;
+
+        return makeCandidate(full, width, work, ideal, minEdge, maxEdge, leftEdge, rightEdge, fixedMode);
+      }).filter((candidate) => candidate.leftEdge >= 0 && candidate.rightEdge >= 0);
 
       return candidates.sort((a, b) => a.score - b.score || b.full - a.full);
     }
@@ -838,14 +907,14 @@
     function renderPieces(best, width, work, minEdge, maxEdge) {
       el.roofbar.innerHTML = '';
       const pieces = [
-        { width: best.edge, label: mm(best.edge), edge: true }
+        { width: best.leftEdge, label: mm(best.leftEdge), edge: true }
       ];
 
       for (let i = 0; i < best.full; i++) {
         pieces.push({ width: work, label: i === 0 ? mm(work) : '', edge: false });
       }
 
-      pieces.push({ width: best.edge, label: mm(best.edge), edge: true });
+      pieces.push({ width: best.rightEdge, label: mm(best.rightEdge), edge: true });
 
       pieces.forEach((piece) => {
         const div = document.createElement('div');
@@ -861,7 +930,7 @@
       const rows = [];
 
       for (let i = 0; i <= best.full; i++) {
-        const layoutPosition = best.edge + i * work;
+        const layoutPosition = best.leftEdge + i * work;
         rows.push({
           number: i + 1,
           layoutPosition,
@@ -901,12 +970,23 @@
       const ideal = numberOf(el.idealEdge);
       const minEdge = numberOf(el.minEdge);
       const maxEdge = numberOf(el.maxEdge);
+      const fixedMode = el.fixedEdgeMode.value;
+      const fixedEdge = numberOf(el.fixedEdge);
+      const usesFixedEdge = fixedMode !== 'none';
 
-      if (![width, work, ideal, minEdge, maxEdge].every(Number.isFinite) || width <= 0 || work <= 0 || minEdge > maxEdge) {
+      if (
+        ![width, work, ideal, minEdge, maxEdge].every(Number.isFinite)
+        || (usesFixedEdge && !Number.isFinite(fixedEdge))
+        || width <= 0
+        || work <= 0
+        || (usesFixedEdge && (fixedEdge < 0 || fixedEdge >= width))
+        || minEdge > maxEdge
+      ) {
         el.bestEdge.textContent = '-';
         el.bestFull.textContent = '-';
         el.bestRequired.textContent = '-';
         el.bestCaps.textContent = '-';
+        el.edgeModeNote.textContent = '左右同寸法';
         el.edgeSheetNote.textContent = '端部用を含む';
         el.bestStatus.textContent = '入力確認';
         el.bestDiff.textContent = '数値または最小・最大端幅を確認してください';
@@ -917,11 +997,21 @@
         return;
       }
 
-      const candidates = buildCandidates(width, work, ideal, minEdge, maxEdge);
+      const candidates = usesFixedEdge
+        ? buildFixedCandidates(width, work, ideal, minEdge, maxEdge, fixedMode, fixedEdge)
+        : buildCandidates(width, work, ideal, minEdge, maxEdge);
       const best = candidates[0];
       const status = best.inRange ? 'OK' : '範囲外';
+      const modeLabel = fixedMode === 'left'
+        ? `左端 ${mm(fixedEdge)} 固定`
+        : fixedMode === 'right'
+          ? `右端 ${mm(fixedEdge)} 固定`
+          : '左右同寸法';
 
-      el.bestEdge.textContent = mm(best.edge);
+      el.bestEdge.textContent = best.leftEdge === best.rightEdge
+        ? mm(best.leftEdge)
+        : `${mm(best.leftEdge)} / ${mm(best.rightEdge)}`;
+      el.edgeModeNote.textContent = modeLabel;
       el.bestFull.textContent = `${best.full}枚`;
       el.bestRequired.textContent = `${best.requiredSheets}枚`;
       el.bestCaps.textContent = `${best.capCount}個`;
@@ -932,9 +1022,11 @@
           : '端部用なし';
       el.bestStatus.textContent = status;
       el.bestStatus.style.color = best.inRange ? 'var(--strong)' : 'var(--warn)';
-      el.bestDiff.textContent = `理想 ${mm(ideal)} との差 ${mm(best.diff)}`;
+      el.bestDiff.textContent = `${modeLabel}、理想との差 ${mm(best.diff)}`;
       el.scaleWidth.textContent = `屋根横幅 ${mm(width)}`;
-      el.formula.textContent = `${mm(width)} - ${best.full}枚 × ${mm(work)} = ${mm(width - best.full * work)}、左右で割って端幅 ${mm(best.edge)}。端幅が140mm以下なら端部は1枚から取り合わせ、140mm超なら2枚追加。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`;
+      el.formula.textContent = usesFixedEdge
+        ? `${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端幅が140mm以下なら端部は1枚から取り合わせ、140mm超なら左右それぞれに追加。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`
+        : `${mm(width)} - ${best.full}枚 × ${mm(work)} = ${mm(width - best.full * work)}、左右で割って端幅 ${mm(best.edge)}。端幅が140mm以下なら端部は1枚から取り合わせ、140mm超なら左右それぞれに追加。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`;
 
       renderPieces(best, width, work, minEdge, maxEdge);
       currentMarkings = buildMarkings(best, work);
@@ -945,10 +1037,10 @@
         const row = document.createElement('tr');
         if (index === 0) row.className = 'best';
         row.innerHTML = `
-          <td data-label="候補">${index === 0 ? 'おすすめ' : '第2プラン'}</td>
-          <td data-label="左端">${mm(candidate.edge)}</td>
+          <td data-label="候補">${index === 0 ? 'おすすめ' : `候補${index + 1}`}</td>
+          <td data-label="左端">${mm(candidate.leftEdge)}</td>
           <td data-label="定尺">${candidate.full}枚</td>
-          <td data-label="右端">${mm(candidate.edge)}</td>
+          <td data-label="右端">${mm(candidate.rightEdge)}</td>
           <td data-label="必要枚数">${candidate.requiredSheets}枚</td>
           <td data-label="キャップ">${candidate.capCount}個</td>
           <td class="hide-sm" data-label="理想差">${mm(candidate.diff)}</td>
@@ -967,7 +1059,9 @@
         '屋根材 左右均等割付計算',
         `屋根横幅: ${mm(numberOf(el.roofWidth))}`,
         `働き幅: ${mm(numberOf(el.workWidth))}`,
-        `おすすめ: 左端 ${el.bestEdge.textContent} / 中央 ${el.bestFull.textContent} / 右端 ${el.bestEdge.textContent}`,
+        `固定条件: ${el.fixedEdgeMode.options[el.fixedEdgeMode.selectedIndex].textContent}${el.fixedEdgeMode.value === 'none' ? '' : ` ${mm(numberOf(el.fixedEdge))}`}`,
+        `おすすめ端幅: ${el.bestEdge.textContent}`,
+        `中央: ${el.bestFull.textContent}`,
         `必要枚数: ${el.bestRequired.textContent}（${el.edgeSheetNote.textContent}）`,
         `キャップ数: ${el.bestCaps.textContent}`,
         `${el.formula.textContent}`,
@@ -977,12 +1071,15 @@
       ].join('\n');
     }
 
-    document.querySelectorAll('input').forEach((input) => {
-      input.addEventListener('input', () => {
+    document.querySelectorAll('input, select').forEach((input) => {
+      const update = () => {
         el.copyStatus.textContent = '';
         saveInputs();
         render();
-      });
+      };
+
+      input.addEventListener('input', update);
+      input.addEventListener('change', update);
     });
 
     el.resetBtn.addEventListener('click', () => {
