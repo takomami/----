@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="roof-icon.svg">
   <link rel="icon" href="roof-icon.svg" type="image/svg+xml">
-  <title>屋根材 端部指定割付計算</title>
+  <title>割付プログラム</title>
   <style>
     :root {
       --bg: #f3f5f1;
@@ -634,7 +634,7 @@
   <main>
     <header>
       <div>
-        <h1>屋根材 端部指定割付計算</h1>
+        <h1>割付プログラム</h1>
         <p class="sub">働き幅 333mm の屋根材を、左右均等または任意の端部寸法を固定して割付します。端部の理想寸法は 150mm で初期設定しています。</p>
       </div>
       <a class="helpLink" href="readme.html">使い方</a>
@@ -1077,7 +1077,7 @@
       ));
 
       return [
-        '屋根材 端部指定割付計算',
+        '割付プログラム',
         `屋根横幅: ${mm(numberOf(el.roofWidth))}`,
         `働き幅: ${mm(numberOf(el.workWidth))}`,
         `固定条件: ${el.fixedEdgeMode.options[el.fixedEdgeMode.selectedIndex].textContent}${el.fixedEdgeMode.value === 'none' ? '' : ` ${mm(numberOf(el.fixedEdge))}`}`,
