@@ -667,7 +667,7 @@
             <input id="idealEdge" type="number" inputmode="decimal" min="0" step="0.5" value="150">
           </label>
         </div>
-        <div class="grid2">
+        <div class="grid2" id="edgeRangeField">
           <label>
             最小端幅
             <input id="minEdge" type="number" inputmode="decimal" min="0" step="0.5" value="90">
@@ -798,6 +798,7 @@
     const el = {
       material: document.querySelector('#material'),
       idealEdgeField: document.querySelector('#idealEdgeField'),
+      edgeRangeField: document.querySelector('#edgeRangeField'),
       roofWidth: document.querySelector('#roofWidth'),
       workWidth: document.querySelector('#workWidth'),
       idealEdge: document.querySelector('#idealEdge'),
@@ -882,7 +883,10 @@
       const material = selectedMaterial();
       const isKakunami = material === materials.kakunami;
       el.idealEdgeField.hidden = isKakunami;
+      el.edgeRangeField.hidden = isKakunami;
       el.idealEdge.disabled = isKakunami;
+      el.minEdge.disabled = isKakunami;
+      el.maxEdge.disabled = isKakunami;
       el.diffHeader.textContent = isKakunami ? '均等差' : '理想差';
     }
 
@@ -990,8 +994,7 @@
       return Math.abs(edge - nearest);
     }
 
-    function makeKakunamiCandidate(full, width, work, minEdge, maxEdge, leftEdge, rightEdge, fixedMode, pitch) {
-      const inRange = leftEdge >= minEdge && leftEdge <= maxEdge && rightEdge >= minEdge && rightEdge <= maxEdge;
+    function makeKakunamiCandidate(full, width, work, leftEdge, rightEdge, fixedMode, pitch) {
       const edgeSheetCount = countEdgeSheets(leftEdge, rightEdge);
       const requiredSheets = full + edgeSheetCount;
       const pieceCount = full + [leftEdge, rightEdge].filter((edge) => edge > 0).length;
@@ -1003,12 +1006,12 @@
         leftEdge,
         rightEdge,
         diff: balanceDiff,
-        inRange,
+        inRange: true,
         fixedMode,
         edgeSheetCount,
         requiredSheets,
         capCount: Math.max(0, pieceCount - 1),
-        score: balanceDiff + rangePenalty(leftEdge, minEdge, maxEdge) + rangePenalty(rightEdge, minEdge, maxEdge)
+        score: balanceDiff
       };
       candidate.waveDiff = wavePenalty(leftEdge, pitch) + wavePenalty(rightEdge, pitch);
       candidate.score += candidate.waveDiff * 20;
@@ -1020,7 +1023,7 @@
       return Array.from({ length: maxStep + 1 }, (_, index) => Math.round(index * pitch * 10) / 10);
     }
 
-    function buildKakunamiCandidates(width, work, minEdge, maxEdge, pitch) {
+    function buildKakunamiCandidates(width, work, pitch) {
       const maxFull = Math.floor(width / work);
       const fullCounts = [...new Set([maxFull, Math.max(0, maxFull - 1), Math.max(0, maxFull - 2)])];
       const candidates = [];
@@ -1031,7 +1034,7 @@
 
         steppedEdges(totalEdge, pitch).forEach((leftEdge) => {
           const rightEdge = totalEdge - leftEdge;
-          candidates.push(makeKakunamiCandidate(full, width, work, minEdge, maxEdge, leftEdge, rightEdge, 'none', pitch));
+          candidates.push(makeKakunamiCandidate(full, width, work, leftEdge, rightEdge, 'none', pitch));
         });
       });
 
@@ -1040,7 +1043,7 @@
         .slice(0, 5);
     }
 
-    function buildFixedKakunamiCandidates(width, work, minEdge, maxEdge, fixedMode, fixedEdge, pitch) {
+    function buildFixedKakunamiCandidates(width, work, fixedMode, fixedEdge, pitch) {
       const available = width - fixedEdge;
       const maxFull = Math.floor(available / work);
       const targetFull = Math.round(available / work);
@@ -1058,7 +1061,7 @@
         const leftEdge = fixedMode === 'left' ? fixedEdge : freeEdge;
         const rightEdge = fixedMode === 'right' ? fixedEdge : freeEdge;
 
-        return makeKakunamiCandidate(full, width, work, minEdge, maxEdge, leftEdge, rightEdge, fixedMode, pitch);
+        return makeKakunamiCandidate(full, width, work, leftEdge, rightEdge, fixedMode, pitch);
       }).filter((candidate) => candidate.leftEdge >= 0 && candidate.rightEdge >= 0);
 
       return candidates.sort((a, b) => a.score - b.score || b.full - a.full);
@@ -1073,11 +1076,11 @@
       }
 
       return usesFixedEdge
-        ? buildFixedKakunamiCandidates(width, work, minEdge, maxEdge, fixedMode, fixedEdge, material.wavePitch)
-        : buildKakunamiCandidates(width, work, minEdge, maxEdge, material.wavePitch);
+        ? buildFixedKakunamiCandidates(width, work, fixedMode, fixedEdge, material.wavePitch)
+        : buildKakunamiCandidates(width, work, material.wavePitch);
     }
 
-    function renderPieces(best, width, work, minEdge, maxEdge) {
+    function renderPieces(best, width, work, minEdge, maxEdge, usesRange) {
       el.roofbar.innerHTML = '';
       const pieces = [
         { width: best.leftEdge, label: '', edge: true }
@@ -1091,7 +1094,7 @@
 
       pieces.forEach((piece) => {
         const div = document.createElement('div');
-        const tooSmallOrLarge = piece.edge && (piece.width < minEdge || piece.width > maxEdge);
+        const tooSmallOrLarge = usesRange && piece.edge && (piece.width < minEdge || piece.width > maxEdge);
         div.className = `piece ${piece.edge ? 'edge' : 'full'} ${tooSmallOrLarge ? 'bad' : ''}`;
         div.style.width = `${(piece.width / width) * 100}%`;
         div.textContent = piece.label;
@@ -1150,16 +1153,18 @@
       const fixedEdge = numberOf(el.fixedEdge);
       const markingOffset = numberOf(el.markingOffset);
       const usesFixedEdge = fixedMode !== 'none';
+      const isKakunami = Boolean(material.wavePitch);
+      const needsRange = !isKakunami;
 
       if (
-        ![width, work, minEdge, maxEdge, markingOffset].every(Number.isFinite)
-        || (!material.wavePitch && !Number.isFinite(ideal))
+        ![width, work, markingOffset].every(Number.isFinite)
+        || (needsRange && ![ideal, minEdge, maxEdge].every(Number.isFinite))
         || (usesFixedEdge && !Number.isFinite(fixedEdge))
         || width <= 0
         || work <= 0
         || markingOffset < 0
         || (usesFixedEdge && (fixedEdge < 0 || fixedEdge >= width))
-        || minEdge > maxEdge
+        || (needsRange && minEdge > maxEdge)
       ) {
         el.bestEdge.textContent = '-';
         el.bestFull.textContent = '-';
@@ -1168,7 +1173,9 @@
         el.edgeModeNote.textContent = '左右同寸法';
         el.edgeSheetNote.textContent = '端部用を含む';
         el.bestStatus.textContent = '入力確認';
-        el.bestDiff.textContent = '数値または最小・最大端幅を確認してください';
+        el.bestDiff.textContent = isKakunami
+          ? '数値または固定端幅を確認してください'
+          : '数値または最小・最大端幅を確認してください';
         el.scaleLeft.textContent = '左端 -';
         el.scaleWidth.textContent = '-';
         el.scaleRight.textContent = '右端 -';
@@ -1182,7 +1189,7 @@
 
       const candidates = buildMaterialCandidates(material, width, work, ideal, minEdge, maxEdge, fixedMode, fixedEdge);
       const best = candidates[0];
-      const status = best.inRange ? 'OK' : '範囲外';
+      const status = isKakunami ? 'OK' : best.inRange ? 'OK' : '範囲外';
       const modeLabel = fixedMode === 'left'
         ? `左端 ${mm(fixedEdge)} 固定`
         : fixedMode === 'right'
@@ -1202,14 +1209,14 @@
           ? '端部は左右分 2枚追加'
           : '端部用なし';
       el.bestStatus.textContent = status;
-      el.bestStatus.style.color = best.inRange ? 'var(--strong)' : 'var(--warn)';
-      el.bestDiff.textContent = material.wavePitch
+      el.bestStatus.style.color = status === 'OK' ? 'var(--strong)' : 'var(--warn)';
+      el.bestDiff.textContent = isKakunami
         ? `${modeLabel}、均等差 ${mm(best.diff)}、山ピッチ差 ${mm(best.waveDiff)}`
         : `${modeLabel}、理想との差 ${mm(best.diff)}`;
       el.scaleLeft.textContent = `左端 ${mm(best.leftEdge)}`;
       el.scaleWidth.textContent = `屋根横幅 ${mm(width)}`;
       el.scaleRight.textContent = `右端 ${mm(best.rightEdge)}`;
-      if (material.wavePitch) {
+      if (isKakunami) {
         el.formula.textContent = usesFixedEdge
           ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端部は ${mm(material.wavePitch)} ごとの割りポイントに近い候補を優先。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`
           : `${material.name}（${material.note}）。${mm(width)} - ${best.full}枚 × ${mm(work)} = 端部合計 ${mm(width - best.full * work)}。端部は ${mm(material.wavePitch)} ごとの割りポイントを考慮して左端 ${mm(best.leftEdge)} / 右端 ${mm(best.rightEdge)}。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`;
@@ -1219,7 +1226,7 @@
           : `${material.name}（${material.note}）。${mm(width)} - ${best.full}枚 × ${mm(work)} = ${mm(width - best.full * work)}、左右で割って端幅 ${mm(best.edge)}。端幅が140mm以下なら端部は1枚から取り合わせ、140mm超なら左右それぞれに追加。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`;
       }
 
-      renderPieces(best, width, work, minEdge, maxEdge);
+      renderPieces(best, width, work, minEdge, maxEdge, needsRange);
       currentMarkings = buildMarkings(best, work, el.markingDirection.value, markingOffset);
       el.markingNote.textContent = `おすすめ案の割付位置から、実際にけがく位置を${el.markingDirection.value === 'left' ? '左' : '右'}へ${mm(markingOffset)}ずらして表示します。1行に2箇所分を並べています。`;
       renderMarkings(currentMarkings);
@@ -1236,7 +1243,7 @@
           <td data-label="必要枚数">${candidate.requiredSheets}枚</td>
           <td data-label="キャップ">${candidate.capCount}個</td>
           <td class="hide-sm" data-label="${material.wavePitch ? '均等差' : '理想差'}">${mm(candidate.diff)}</td>
-          <td data-label="判定"><span class="badge ${candidate.inRange ? '' : 'warn'}">${candidate.inRange ? 'OK' : '範囲外'}</span></td>
+          <td data-label="判定"><span class="badge ${isKakunami || candidate.inRange ? '' : 'warn'}">${isKakunami || candidate.inRange ? 'OK' : '範囲外'}</span></td>
         `;
         el.candidateRows.append(row);
       });
