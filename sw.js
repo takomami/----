@@ -1,4 +1,4 @@
-const CACHE_NAME = 'roof-layout-v6';
+const CACHE_NAME = 'roof-layout-v7';
 const APP_FILES = [
   './',
   './index.html',

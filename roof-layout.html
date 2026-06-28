@@ -1018,25 +1018,14 @@
       return candidate;
     }
 
-    function steppedEdges(totalEdge, pitch) {
-      const maxStep = Math.floor(totalEdge / pitch);
-      return Array.from({ length: maxStep + 1 }, (_, index) => Math.round(index * pitch * 10) / 10);
-    }
-
     function buildKakunamiCandidates(width, work, pitch) {
       const maxFull = Math.floor(width / work);
       const fullCounts = [...new Set([maxFull, Math.max(0, maxFull - 1), Math.max(0, maxFull - 2)])];
-      const candidates = [];
-
-      fullCounts.forEach((full) => {
+      const candidates = fullCounts.map((full) => {
         const totalEdge = width - full * work;
-        if (totalEdge < 0) return;
-
-        steppedEdges(totalEdge, pitch).forEach((leftEdge) => {
-          const rightEdge = totalEdge - leftEdge;
-          candidates.push(makeKakunamiCandidate(full, width, work, leftEdge, rightEdge, 'none', pitch));
-        });
-      });
+        const edge = totalEdge / 2;
+        return makeKakunamiCandidate(full, width, work, edge, edge, 'none', pitch);
+      }).filter((candidate) => candidate.leftEdge >= 0 && candidate.rightEdge >= 0);
 
       return candidates
         .sort((a, b) => a.score - b.score || b.full - a.full)
@@ -1218,8 +1207,8 @@
       el.scaleRight.textContent = `右端 ${mm(best.rightEdge)}`;
       if (isKakunami) {
         el.formula.textContent = usesFixedEdge
-          ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端部は ${mm(material.wavePitch)} ごとの割りポイントに近い候補を優先。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`
-          : `${material.name}（${material.note}）。${mm(width)} - ${best.full}枚 × ${mm(work)} = 端部合計 ${mm(width - best.full * work)}。端部は ${mm(material.wavePitch)} ごとの割りポイントを考慮して左端 ${mm(best.leftEdge)} / 右端 ${mm(best.rightEdge)}。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`;
+          ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端部は ${mm(material.wavePitch)} ごとの山ピッチ差が小さい候補を優先。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`
+          : `${material.name}（${material.note}）。${mm(width)} - ${best.full}枚 × ${mm(work)} = 端部合計 ${mm(width - best.full * work)}、左右で割って端幅 ${mm(best.edge)}。${mm(material.wavePitch)} ごとの山ピッチ差も確認します。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`;
       } else {
         el.formula.textContent = usesFixedEdge
           ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端幅が140mm以下なら端部は1枚から取り合わせ、140mm超なら左右それぞれに追加。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`
