@@ -1,4 +1,4 @@
-const CACHE_NAME = 'roof-layout-v3';
+const CACHE_NAME = 'roof-layout-v4';
 const APP_FILES = [
   './',
   './index.html',
@@ -26,7 +26,26 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+
+  const request = event.request;
+  const isHtmlRequest = request.mode === 'navigate'
+    || request.destination === 'document'
+    || request.url.endsWith('.html');
+
+  if (isHtmlRequest) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    caches.match(request).then((cached) => cached || fetch(request))
   );
 });
