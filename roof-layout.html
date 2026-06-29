@@ -729,7 +729,7 @@
             <strong id="bestRequired">-</strong>
             <small id="edgeSheetNote">端部用を含む</small>
           </div>
-          <div class="metric">
+          <div class="metric" id="capsMetric">
             <span>キャップ数</span>
             <strong id="bestCaps">-</strong>
             <small>材どうしの境界</small>
@@ -764,7 +764,7 @@
                 <th>定尺</th>
                 <th>右端</th>
                 <th>必要枚数</th>
-                <th>キャップ</th>
+                <th id="capsHeader">キャップ</th>
                 <th class="hide-sm" id="diffHeader">理想差</th>
                 <th>判定</th>
               </tr>
@@ -812,10 +812,12 @@
       edgeModeNote: document.querySelector('#edgeModeNote'),
       bestFull: document.querySelector('#bestFull'),
       bestRequired: document.querySelector('#bestRequired'),
+      capsMetric: document.querySelector('#capsMetric'),
       bestCaps: document.querySelector('#bestCaps'),
       edgeSheetNote: document.querySelector('#edgeSheetNote'),
       bestStatus: document.querySelector('#bestStatus'),
       bestDiff: document.querySelector('#bestDiff'),
+      capsHeader: document.querySelector('#capsHeader'),
       diffHeader: document.querySelector('#diffHeader'),
       roofbar: document.querySelector('#roofbar'),
       scaleLeft: document.querySelector('#scaleLeft'),
@@ -887,6 +889,8 @@
       el.idealEdge.disabled = isKakunami;
       el.minEdge.disabled = isKakunami;
       el.maxEdge.disabled = isKakunami;
+      el.capsMetric.hidden = isKakunami;
+      el.capsHeader.hidden = isKakunami;
       el.diffHeader.textContent = isKakunami ? '均等差' : '理想差';
     }
 
@@ -926,6 +930,13 @@
       const largeEdgeCount = edges.length - smallEdgeCount;
 
       return largeEdgeCount + (smallEdgeCount > 0 ? 1 : 0);
+    }
+
+    function countKakunamiEdgeSheets(leftEdge, rightEdge) {
+      const nestingLimit = 300;
+      const edges = [leftEdge, rightEdge].filter((edge) => edge > 0);
+      if (edges.length === 0) return 0;
+      return edges.every((edge) => edge <= nestingLimit) ? 1 : edges.length;
     }
 
     function makeCandidate(full, width, work, ideal, minEdge, maxEdge, leftEdge, rightEdge, fixedMode) {
@@ -995,9 +1006,8 @@
     }
 
     function makeKakunamiCandidate(full, width, work, leftEdge, rightEdge, fixedMode, pitch) {
-      const edgeSheetCount = countEdgeSheets(leftEdge, rightEdge);
+      const edgeSheetCount = countKakunamiEdgeSheets(leftEdge, rightEdge);
       const requiredSheets = full + edgeSheetCount;
-      const pieceCount = full + [leftEdge, rightEdge].filter((edge) => edge > 0).length;
       const balanceDiff = fixedMode === 'none' ? Math.abs(leftEdge - rightEdge) : 0;
       const freeEdge = fixedMode === 'left' ? rightEdge : fixedMode === 'right' ? leftEdge : leftEdge;
       const candidate = {
@@ -1010,7 +1020,7 @@
         fixedMode,
         edgeSheetCount,
         requiredSheets,
-        capCount: Math.max(0, pieceCount - 1),
+        capCount: 0,
         score: balanceDiff
       };
       candidate.waveDiff = wavePenalty(leftEdge, pitch) + wavePenalty(rightEdge, pitch);
@@ -1192,11 +1202,21 @@
       el.bestFull.textContent = `${best.full}枚`;
       el.bestRequired.textContent = `${best.requiredSheets}枚`;
       el.bestCaps.textContent = `${best.capCount}個`;
-      el.edgeSheetNote.textContent = best.edgeSheetCount === 1
-        ? '端部は取り合わせ 1枚'
-        : best.edgeSheetCount === 2
-          ? '端部は左右分 2枚追加'
-          : '端部用なし';
+      if (isKakunami) {
+        const hasTwoEdges = best.leftEdge > 0 && best.rightEdge > 0;
+        const canNestBothEdges = hasTwoEdges && best.leftEdge <= 300 && best.rightEdge <= 300;
+        el.edgeSheetNote.textContent = best.edgeSheetCount === 1
+          ? canNestBothEdges ? '端部は300mmまで取り合わせ 1枚' : '端部は1枚'
+          : best.edgeSheetCount === 2
+            ? '端部は各1枚ずつ'
+            : '端部用なし';
+      } else {
+        el.edgeSheetNote.textContent = best.edgeSheetCount === 1
+          ? '端部は取り合わせ 1枚'
+          : best.edgeSheetCount === 2
+            ? '端部は左右分 2枚追加'
+            : '端部用なし';
+      }
       el.bestStatus.textContent = status;
       el.bestStatus.style.color = status === 'OK' ? 'var(--strong)' : 'var(--warn)';
       el.bestDiff.textContent = isKakunami
@@ -1207,8 +1227,8 @@
       el.scaleRight.textContent = `右端 ${mm(best.rightEdge)}`;
       if (isKakunami) {
         el.formula.textContent = usesFixedEdge
-          ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端部は ${mm(material.wavePitch)} ごとの山ピッチ差が小さい候補を優先。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`
-          : `${material.name}（${material.note}）。${mm(width)} - ${best.full}枚 × ${mm(work)} = 端部合計 ${mm(width - best.full * work)}、左右で割って端幅 ${mm(best.edge)}。${mm(material.wavePitch)} ごとの山ピッチ差も確認します。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`;
+          ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端部は300mmまでなら両方取り合わせで1枚、300mm超なら各1枚ずつ。${mm(material.wavePitch)} ごとの山ピッチ差が小さい候補を優先。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。`
+          : `${material.name}（${material.note}）。${mm(width)} - ${best.full}枚 × ${mm(work)} = 端部合計 ${mm(width - best.full * work)}、左右で割って端幅 ${mm(best.edge)}。端部は300mmまでなら両方取り合わせで1枚、300mm超なら各1枚ずつ。${mm(material.wavePitch)} ごとの山ピッチ差も確認します。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。`;
       } else {
         el.formula.textContent = usesFixedEdge
           ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端幅が140mm以下なら端部は1枚から取り合わせ、140mm超なら左右それぞれに追加。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`
@@ -1230,7 +1250,7 @@
           <td data-label="定尺">${candidate.full}枚</td>
           <td data-label="右端">${mm(candidate.rightEdge)}</td>
           <td data-label="必要枚数">${candidate.requiredSheets}枚</td>
-          <td data-label="キャップ">${candidate.capCount}個</td>
+          ${isKakunami ? '' : `<td data-label="キャップ">${candidate.capCount}個</td>`}
           <td class="hide-sm" data-label="${material.wavePitch ? '均等差' : '理想差'}">${mm(candidate.diff)}</td>
           <td data-label="判定"><span class="badge ${isKakunami || candidate.inRange ? '' : 'warn'}">${isKakunami || candidate.inRange ? 'OK' : '範囲外'}</span></td>
         `;
@@ -1253,7 +1273,7 @@
         `おすすめ端幅: ${el.bestEdge.textContent}`,
         `中央: ${el.bestFull.textContent}`,
         `必要枚数: ${el.bestRequired.textContent}（${el.edgeSheetNote.textContent}）`,
-        `キャップ数: ${el.bestCaps.textContent}`,
+        ...(selectedMaterial() === materials.kakunami ? [] : [`キャップ数: ${el.bestCaps.textContent}`]),
         `${el.formula.textContent}`,
         '',
         `けがき寸法一覧（割付位置から${el.markingDirection.value === 'left' ? '左へ' : '右へ'}${mm(numberOf(el.markingOffset))}）`,
