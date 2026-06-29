@@ -1030,40 +1030,23 @@
 
     function buildKakunamiCandidates(width, work, pitch) {
       const maxFull = Math.floor(width / work);
-      const fullCounts = [...new Set([maxFull, Math.max(0, maxFull - 1), Math.max(0, maxFull - 2)])];
-      const candidates = fullCounts.map((full) => {
-        const totalEdge = width - full * work;
-        const edge = totalEdge / 2;
-        return makeKakunamiCandidate(full, width, work, edge, edge, 'none', pitch);
-      }).filter((candidate) => candidate.leftEdge >= 0 && candidate.rightEdge >= 0);
-
-      return candidates
-        .sort((a, b) => a.score - b.score || b.full - a.full)
-        .slice(0, 5);
+      const totalEdge = width - maxFull * work;
+      const edge = totalEdge / 2;
+      return [makeKakunamiCandidate(maxFull, width, work, edge, edge, 'none', pitch)]
+        .filter((candidate) => candidate.leftEdge >= 0 && candidate.rightEdge >= 0);
     }
 
     function buildFixedKakunamiCandidates(width, work, fixedMode, fixedEdge, pitch) {
       const available = width - fixedEdge;
       const maxFull = Math.floor(available / work);
-      const targetFull = Math.round(available / work);
-      const fullCounts = [...new Set([
-        maxFull,
-        Math.max(0, maxFull - 1),
-        Math.max(0, maxFull - 2),
-        Math.max(0, targetFull - 1),
-        Math.max(0, targetFull),
-        Math.max(0, targetFull + 1)
-      ])].filter((full) => full >= 0);
+      const freeEdge = width - fixedEdge - maxFull * work;
+      const leftEdge = fixedMode === 'left' ? fixedEdge : freeEdge;
+      const rightEdge = fixedMode === 'right' ? fixedEdge : freeEdge;
+      const fixedCandidate = makeKakunamiCandidate(maxFull, width, work, leftEdge, rightEdge, fixedMode, pitch);
+      const equalCandidate = buildKakunamiCandidates(width, work, pitch)[0];
 
-      const candidates = fullCounts.map((full) => {
-        const freeEdge = width - fixedEdge - full * work;
-        const leftEdge = fixedMode === 'left' ? fixedEdge : freeEdge;
-        const rightEdge = fixedMode === 'right' ? fixedEdge : freeEdge;
-
-        return makeKakunamiCandidate(full, width, work, leftEdge, rightEdge, fixedMode, pitch);
-      }).filter((candidate) => candidate.leftEdge >= 0 && candidate.rightEdge >= 0);
-
-      return candidates.sort((a, b) => a.score - b.score || b.full - a.full);
+      return [fixedCandidate, equalCandidate]
+        .filter((candidate) => candidate && candidate.leftEdge >= 0 && candidate.rightEdge >= 0);
     }
 
     function buildMaterialCandidates(material, width, work, ideal, minEdge, maxEdge, fixedMode, fixedEdge) {
@@ -1227,7 +1210,7 @@
       el.scaleRight.textContent = `右端 ${mm(best.rightEdge)}`;
       if (isKakunami) {
         el.formula.textContent = usesFixedEdge
-          ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端部は300mmまでなら両方取り合わせで1枚、300mm超なら各1枚ずつ。${mm(material.wavePitch)} ごとの山ピッチ差が小さい候補を優先。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。`
+          ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。候補2に固定なしの左右均等案を表示します。端部は300mmまでなら両方取り合わせで1枚、300mm超なら各1枚ずつ。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。`
           : `${material.name}（${material.note}）。${mm(width)} - ${best.full}枚 × ${mm(work)} = 端部合計 ${mm(width - best.full * work)}、左右で割って端幅 ${mm(best.edge)}。端部は300mmまでなら両方取り合わせで1枚、300mm超なら各1枚ずつ。${mm(material.wavePitch)} ごとの山ピッチ差も確認します。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。`;
       } else {
         el.formula.textContent = usesFixedEdge
