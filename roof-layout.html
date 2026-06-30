@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="roof-icon.svg">
   <link rel="icon" href="roof-icon.svg" type="image/svg+xml">
-  <title>屋根材 端部指定割付計算</title>
+  <title>割付プログラム</title>
   <style>
     :root {
       --bg: #f3f5f1;
@@ -30,6 +30,10 @@
     }
 
     * { box-sizing: border-box; }
+
+    [hidden] {
+      display: none !important;
+    }
 
     body {
       margin: 0;
@@ -634,14 +638,21 @@
   <main>
     <header>
       <div>
-        <h1>屋根材 端部指定割付計算</h1>
-        <p class="sub">働き幅 333mm の屋根材を、左右均等または任意の端部寸法を固定して割付します。端部の理想寸法は 150mm で初期設定しています。</p>
+        <h1>割付プログラム</h1>
+        <p class="sub">使用材料を選び、左右均等または任意の端部寸法を固定して割付します。</p>
       </div>
       <a class="helpLink" href="readme.html">使い方</a>
     </header>
 
     <div class="app">
       <section class="panel inputs" aria-label="入力">
+        <label>
+          使用材料
+          <select id="material">
+            <option value="hirock">ハイロック</option>
+            <option value="kakunami">角波</option>
+          </select>
+        </label>
         <label>
           屋根の横幅 W
           <input id="roofWidth" type="number" inputmode="decimal" min="1" step="1" value="7280">
@@ -651,19 +662,19 @@
             働き幅
             <input id="workWidth" type="number" inputmode="decimal" min="1" step="1" value="333">
           </label>
-          <label>
+          <label id="idealEdgeField">
             理想の端幅
-            <input id="idealEdge" type="number" inputmode="decimal" min="0" step="1" value="150">
+            <input id="idealEdge" type="number" inputmode="decimal" min="0" step="0.5" value="150">
           </label>
         </div>
-        <div class="grid2">
+        <div class="grid2" id="edgeRangeField">
           <label>
             最小端幅
-            <input id="minEdge" type="number" inputmode="decimal" min="0" step="1" value="90">
+            <input id="minEdge" type="number" inputmode="decimal" min="0" step="0.5" value="90">
           </label>
           <label>
             最大端幅
-            <input id="maxEdge" type="number" inputmode="decimal" min="0" step="1" value="260">
+            <input id="maxEdge" type="number" inputmode="decimal" min="0" step="0.5" value="260">
           </label>
         </div>
         <div class="grid2">
@@ -677,7 +688,20 @@
           </label>
           <label>
             固定端幅
-            <input id="fixedEdge" type="number" inputmode="decimal" min="0" step="1" value="150">
+            <input id="fixedEdge" type="number" inputmode="decimal" min="0" step="0.5" value="150">
+          </label>
+        </div>
+        <div class="grid2">
+          <label>
+            けがき方向
+            <select id="markingDirection">
+              <option value="right">右へ</option>
+              <option value="left">左へ</option>
+            </select>
+          </label>
+          <label>
+            けがきずらし幅
+            <input id="markingOffset" type="number" inputmode="decimal" min="0" step="0.5" value="25">
           </label>
         </div>
         <div class="actions">
@@ -685,7 +709,7 @@
           <button class="ghost" id="printBtn" type="button" aria-label="A4印刷">印刷</button>
           <button class="ghost" id="resetBtn" type="button" aria-label="初期値に戻す">↺</button>
         </div>
-        <p class="hint">固定なしは、左右端幅 = (屋根横幅 - 中央に入れる定尺枚数 × 働き幅) ÷ 2。左端または右端を固定した場合は、屋根横幅から固定端幅と定尺分を引いた残りを反対側の端幅として計算します。</p>
+        <p class="hint">材料を選ぶと働き幅を自動入力します。固定なしは、左右端幅 = (屋根横幅 - 中央に入れる定尺枚数 × 働き幅) ÷ 2。左端または右端を固定した場合は、屋根横幅から固定端幅と定尺分を引いた残りを反対側の端幅として計算します。</p>
       </section>
 
       <section class="results" aria-label="計算結果">
@@ -705,7 +729,7 @@
             <strong id="bestRequired">-</strong>
             <small id="edgeSheetNote">端部用を含む</small>
           </div>
-          <div class="metric">
+          <div class="metric" id="capsMetric">
             <span>キャップ数</span>
             <strong id="bestCaps">-</strong>
             <small>材どうしの境界</small>
@@ -740,8 +764,8 @@
                 <th>定尺</th>
                 <th>右端</th>
                 <th>必要枚数</th>
-                <th>キャップ</th>
-                <th class="hide-sm">理想差</th>
+                <th id="capsHeader">キャップ</th>
+                <th class="hide-sm" id="diffHeader">理想差</th>
                 <th>判定</th>
               </tr>
             </thead>
@@ -751,7 +775,7 @@
 
         <section class="panel list">
           <h2 class="sectionTitle">けがき寸法一覧</h2>
-          <p class="sectionNote">おすすめ案の割付位置から、実際にけがく位置を右へ25mmずらして表示します。1行に2箇所分を並べています。</p>
+          <p class="sectionNote" id="markingNote">おすすめ案の割付位置から、実際にけがく位置を表示します。1行に2箇所分を並べています。</p>
           <table class="markingTable">
             <thead>
               <tr>
@@ -772,6 +796,9 @@
 
   <script>
     const el = {
+      material: document.querySelector('#material'),
+      idealEdgeField: document.querySelector('#idealEdgeField'),
+      edgeRangeField: document.querySelector('#edgeRangeField'),
       roofWidth: document.querySelector('#roofWidth'),
       workWidth: document.querySelector('#workWidth'),
       idealEdge: document.querySelector('#idealEdge'),
@@ -779,19 +806,25 @@
       maxEdge: document.querySelector('#maxEdge'),
       fixedEdgeMode: document.querySelector('#fixedEdgeMode'),
       fixedEdge: document.querySelector('#fixedEdge'),
+      markingDirection: document.querySelector('#markingDirection'),
+      markingOffset: document.querySelector('#markingOffset'),
       bestEdge: document.querySelector('#bestEdge'),
       edgeModeNote: document.querySelector('#edgeModeNote'),
       bestFull: document.querySelector('#bestFull'),
       bestRequired: document.querySelector('#bestRequired'),
+      capsMetric: document.querySelector('#capsMetric'),
       bestCaps: document.querySelector('#bestCaps'),
       edgeSheetNote: document.querySelector('#edgeSheetNote'),
       bestStatus: document.querySelector('#bestStatus'),
       bestDiff: document.querySelector('#bestDiff'),
+      capsHeader: document.querySelector('#capsHeader'),
+      diffHeader: document.querySelector('#diffHeader'),
       roofbar: document.querySelector('#roofbar'),
       scaleLeft: document.querySelector('#scaleLeft'),
       scaleWidth: document.querySelector('#scaleWidth'),
       scaleRight: document.querySelector('#scaleRight'),
       formula: document.querySelector('#formula'),
+      markingNote: document.querySelector('#markingNote'),
       candidateRows: document.querySelector('#candidateRows'),
       markingRows: document.querySelector('#markingRows'),
       copyBtn: document.querySelector('#copyBtn'),
@@ -801,16 +834,33 @@
     };
 
     const defaults = {
+      material: 'hirock',
       roofWidth: 7280,
       workWidth: 333,
       idealEdge: 150,
       minEdge: 90,
       maxEdge: 260,
       fixedEdgeMode: 'none',
-      fixedEdge: 150
+      fixedEdge: 150,
+      markingDirection: 'right',
+      markingOffset: 25
     };
 
     const storageKey = 'roof-layout-inputs';
+
+    const materials = {
+      hirock: {
+        name: 'ハイロック',
+        workWidth: 333,
+        note: '働き幅 333mm'
+      },
+      kakunami: {
+        name: '角波',
+        workWidth: 735,
+        wavePitch: 122.5,
+        note: '働き幅 735mm / 122.5mm × 6山'
+      }
+    };
 
     let currentMarkings = [];
 
@@ -820,6 +870,28 @@
 
     function numberOf(input) {
       return Number.parseFloat(input.value);
+    }
+
+    function selectedMaterial() {
+      return materials[el.material.value] || materials.hirock;
+    }
+
+    function applyMaterialDefaults() {
+      el.workWidth.value = selectedMaterial().workWidth;
+      syncMaterialUi();
+    }
+
+    function syncMaterialUi() {
+      const material = selectedMaterial();
+      const isKakunami = material === materials.kakunami;
+      el.idealEdgeField.hidden = isKakunami;
+      el.edgeRangeField.hidden = isKakunami;
+      el.idealEdge.disabled = isKakunami;
+      el.minEdge.disabled = isKakunami;
+      el.maxEdge.disabled = isKakunami;
+      el.capsMetric.hidden = isKakunami;
+      el.capsHeader.hidden = isKakunami;
+      el.diffHeader.textContent = isKakunami ? '均等差' : '理想差';
     }
 
     function saveInputs() {
@@ -858,6 +930,13 @@
       const largeEdgeCount = edges.length - smallEdgeCount;
 
       return largeEdgeCount + (smallEdgeCount > 0 ? 1 : 0);
+    }
+
+    function countKakunamiEdgeSheets(leftEdge, rightEdge) {
+      const nestingLimit = 300;
+      const edges = [leftEdge, rightEdge].filter((edge) => edge > 0);
+      if (edges.length === 0) return 0;
+      return edges.every((edge) => edge <= nestingLimit) ? 1 : edges.length;
     }
 
     function makeCandidate(full, width, work, ideal, minEdge, maxEdge, leftEdge, rightEdge, fixedMode) {
@@ -920,7 +999,70 @@
       return candidates.sort((a, b) => a.score - b.score || b.full - a.full);
     }
 
-    function renderPieces(best, width, work, minEdge, maxEdge) {
+    function wavePenalty(edge, pitch) {
+      if (!pitch || edge <= 0) return 0;
+      const nearest = Math.round(edge / pitch) * pitch;
+      return Math.abs(edge - nearest);
+    }
+
+    function makeKakunamiCandidate(full, width, work, leftEdge, rightEdge, fixedMode, pitch) {
+      const edgeSheetCount = countKakunamiEdgeSheets(leftEdge, rightEdge);
+      const requiredSheets = full + edgeSheetCount;
+      const balanceDiff = fixedMode === 'none' ? Math.abs(leftEdge - rightEdge) : 0;
+      const freeEdge = fixedMode === 'left' ? rightEdge : fixedMode === 'right' ? leftEdge : leftEdge;
+      const candidate = {
+        full,
+        edge: fixedMode === 'none' ? leftEdge : freeEdge,
+        leftEdge,
+        rightEdge,
+        diff: balanceDiff,
+        inRange: true,
+        fixedMode,
+        edgeSheetCount,
+        requiredSheets,
+        capCount: 0,
+        score: balanceDiff
+      };
+      candidate.waveDiff = wavePenalty(leftEdge, pitch) + wavePenalty(rightEdge, pitch);
+      candidate.score += candidate.waveDiff * 20;
+      return candidate;
+    }
+
+    function buildKakunamiCandidates(width, work, pitch) {
+      const maxFull = Math.floor(width / work);
+      const totalEdge = width - maxFull * work;
+      const edge = totalEdge / 2;
+      return [makeKakunamiCandidate(maxFull, width, work, edge, edge, 'none', pitch)]
+        .filter((candidate) => candidate.leftEdge >= 0 && candidate.rightEdge >= 0);
+    }
+
+    function buildFixedKakunamiCandidates(width, work, fixedMode, fixedEdge, pitch) {
+      const available = width - fixedEdge;
+      const maxFull = Math.floor(available / work);
+      const freeEdge = width - fixedEdge - maxFull * work;
+      const leftEdge = fixedMode === 'left' ? fixedEdge : freeEdge;
+      const rightEdge = fixedMode === 'right' ? fixedEdge : freeEdge;
+      const fixedCandidate = makeKakunamiCandidate(maxFull, width, work, leftEdge, rightEdge, fixedMode, pitch);
+      const equalCandidate = buildKakunamiCandidates(width, work, pitch)[0];
+
+      return [fixedCandidate, equalCandidate]
+        .filter((candidate) => candidate && candidate.leftEdge >= 0 && candidate.rightEdge >= 0);
+    }
+
+    function buildMaterialCandidates(material, width, work, ideal, minEdge, maxEdge, fixedMode, fixedEdge) {
+      const usesFixedEdge = fixedMode !== 'none';
+      if (material !== materials.kakunami) {
+        return usesFixedEdge
+          ? buildFixedCandidates(width, work, ideal, minEdge, maxEdge, fixedMode, fixedEdge)
+          : buildCandidates(width, work, ideal, minEdge, maxEdge);
+      }
+
+      return usesFixedEdge
+        ? buildFixedKakunamiCandidates(width, work, fixedMode, fixedEdge, material.wavePitch)
+        : buildKakunamiCandidates(width, work, material.wavePitch);
+    }
+
+    function renderPieces(best, width, work, minEdge, maxEdge, usesRange) {
       el.roofbar.innerHTML = '';
       const pieces = [
         { width: best.leftEdge, label: '', edge: true }
@@ -934,7 +1076,7 @@
 
       pieces.forEach((piece) => {
         const div = document.createElement('div');
-        const tooSmallOrLarge = piece.edge && (piece.width < minEdge || piece.width > maxEdge);
+        const tooSmallOrLarge = usesRange && piece.edge && (piece.width < minEdge || piece.width > maxEdge);
         div.className = `piece ${piece.edge ? 'edge' : 'full'} ${tooSmallOrLarge ? 'bad' : ''}`;
         div.style.width = `${(piece.width / width) * 100}%`;
         div.textContent = piece.label;
@@ -942,15 +1084,16 @@
       });
     }
 
-    function buildMarkings(best, work) {
+    function buildMarkings(best, work, direction, offset) {
       const rows = [];
+      const sign = direction === 'left' ? -1 : 1;
 
       for (let i = 0; i <= best.full; i++) {
         const layoutPosition = best.leftEdge + i * work;
         rows.push({
           number: i + 1,
           layoutPosition,
-          markingPosition: layoutPosition + 25,
+          markingPosition: layoutPosition + sign * offset,
           note: i === 0
             ? '左端材と中央材の境'
             : i === best.full
@@ -982,21 +1125,28 @@
 
     function render() {
       const width = numberOf(el.roofWidth);
+      const material = selectedMaterial();
+      syncMaterialUi();
       const work = numberOf(el.workWidth);
       const ideal = numberOf(el.idealEdge);
       const minEdge = numberOf(el.minEdge);
       const maxEdge = numberOf(el.maxEdge);
       const fixedMode = el.fixedEdgeMode.value;
       const fixedEdge = numberOf(el.fixedEdge);
+      const markingOffset = numberOf(el.markingOffset);
       const usesFixedEdge = fixedMode !== 'none';
+      const isKakunami = Boolean(material.wavePitch);
+      const needsRange = !isKakunami;
 
       if (
-        ![width, work, ideal, minEdge, maxEdge].every(Number.isFinite)
+        ![width, work, markingOffset].every(Number.isFinite)
+        || (needsRange && ![ideal, minEdge, maxEdge].every(Number.isFinite))
         || (usesFixedEdge && !Number.isFinite(fixedEdge))
         || width <= 0
         || work <= 0
+        || markingOffset < 0
         || (usesFixedEdge && (fixedEdge < 0 || fixedEdge >= width))
-        || minEdge > maxEdge
+        || (needsRange && minEdge > maxEdge)
       ) {
         el.bestEdge.textContent = '-';
         el.bestFull.textContent = '-';
@@ -1005,10 +1155,13 @@
         el.edgeModeNote.textContent = '左右同寸法';
         el.edgeSheetNote.textContent = '端部用を含む';
         el.bestStatus.textContent = '入力確認';
-        el.bestDiff.textContent = '数値または最小・最大端幅を確認してください';
+        el.bestDiff.textContent = isKakunami
+          ? '数値または固定端幅を確認してください'
+          : '数値または最小・最大端幅を確認してください';
         el.scaleLeft.textContent = '左端 -';
         el.scaleWidth.textContent = '-';
         el.scaleRight.textContent = '右端 -';
+        el.markingNote.textContent = 'おすすめ案の割付位置から、実際にけがく位置を表示します。1行に2箇所分を並べています。';
         el.roofbar.innerHTML = '';
         el.candidateRows.innerHTML = '';
         el.markingRows.innerHTML = '';
@@ -1016,11 +1169,9 @@
         return;
       }
 
-      const candidates = usesFixedEdge
-        ? buildFixedCandidates(width, work, ideal, minEdge, maxEdge, fixedMode, fixedEdge)
-        : buildCandidates(width, work, ideal, minEdge, maxEdge);
+      const candidates = buildMaterialCandidates(material, width, work, ideal, minEdge, maxEdge, fixedMode, fixedEdge);
       const best = candidates[0];
-      const status = best.inRange ? 'OK' : '範囲外';
+      const status = isKakunami ? 'OK' : best.inRange ? 'OK' : '範囲外';
       const modeLabel = fixedMode === 'left'
         ? `左端 ${mm(fixedEdge)} 固定`
         : fixedMode === 'right'
@@ -1034,23 +1185,42 @@
       el.bestFull.textContent = `${best.full}枚`;
       el.bestRequired.textContent = `${best.requiredSheets}枚`;
       el.bestCaps.textContent = `${best.capCount}個`;
-      el.edgeSheetNote.textContent = best.edgeSheetCount === 1
-        ? '端部は取り合わせ 1枚'
-        : best.edgeSheetCount === 2
-          ? '端部は左右分 2枚追加'
-          : '端部用なし';
+      if (isKakunami) {
+        const hasTwoEdges = best.leftEdge > 0 && best.rightEdge > 0;
+        const canNestBothEdges = hasTwoEdges && best.leftEdge <= 300 && best.rightEdge <= 300;
+        el.edgeSheetNote.textContent = best.edgeSheetCount === 1
+          ? canNestBothEdges ? '端部は300mmまで取り合わせ 1枚' : '端部は1枚'
+          : best.edgeSheetCount === 2
+            ? '端部は各1枚ずつ'
+            : '端部用なし';
+      } else {
+        el.edgeSheetNote.textContent = best.edgeSheetCount === 1
+          ? '端部は取り合わせ 1枚'
+          : best.edgeSheetCount === 2
+            ? '端部は左右分 2枚追加'
+            : '端部用なし';
+      }
       el.bestStatus.textContent = status;
-      el.bestStatus.style.color = best.inRange ? 'var(--strong)' : 'var(--warn)';
-      el.bestDiff.textContent = `${modeLabel}、理想との差 ${mm(best.diff)}`;
+      el.bestStatus.style.color = status === 'OK' ? 'var(--strong)' : 'var(--warn)';
+      el.bestDiff.textContent = isKakunami
+        ? `${modeLabel}、均等差 ${mm(best.diff)}、山ピッチ差 ${mm(best.waveDiff)}`
+        : `${modeLabel}、理想との差 ${mm(best.diff)}`;
       el.scaleLeft.textContent = `左端 ${mm(best.leftEdge)}`;
       el.scaleWidth.textContent = `屋根横幅 ${mm(width)}`;
       el.scaleRight.textContent = `右端 ${mm(best.rightEdge)}`;
-      el.formula.textContent = usesFixedEdge
-        ? `${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端幅が140mm以下なら端部は1枚から取り合わせ、140mm超なら左右それぞれに追加。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`
-        : `${mm(width)} - ${best.full}枚 × ${mm(work)} = ${mm(width - best.full * work)}、左右で割って端幅 ${mm(best.edge)}。端幅が140mm以下なら端部は1枚から取り合わせ、140mm超なら左右それぞれに追加。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`;
+      if (isKakunami) {
+        el.formula.textContent = usesFixedEdge
+          ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。候補2に固定なしの左右均等案を表示します。端部は300mmまでなら両方取り合わせで1枚、300mm超なら各1枚ずつ。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。`
+          : `${material.name}（${material.note}）。${mm(width)} - ${best.full}枚 × ${mm(work)} = 端部合計 ${mm(width - best.full * work)}、左右で割って端幅 ${mm(best.edge)}。端部は300mmまでなら両方取り合わせで1枚、300mm超なら各1枚ずつ。${mm(material.wavePitch)} ごとの山ピッチ差も確認します。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。`;
+      } else {
+        el.formula.textContent = usesFixedEdge
+          ? `${material.name}（${material.note}）。${modeLabel}。${mm(width)} - 固定端 ${mm(fixedEdge)} - ${best.full}枚 × ${mm(work)} = 反対端 ${mm(best.edge)}。端幅が140mm以下なら端部は1枚から取り合わせ、140mm超なら左右それぞれに追加。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`
+          : `${material.name}（${material.note}）。${mm(width)} - ${best.full}枚 × ${mm(work)} = ${mm(width - best.full * work)}、左右で割って端幅 ${mm(best.edge)}。端幅が140mm以下なら端部は1枚から取り合わせ、140mm超なら左右それぞれに追加。必要枚数は ${best.full} + ${best.edgeSheetCount} = ${best.requiredSheets}枚。キャップは材どうしの境界に ${best.capCount}個。`;
+      }
 
-      renderPieces(best, width, work, minEdge, maxEdge);
-      currentMarkings = buildMarkings(best, work);
+      renderPieces(best, width, work, minEdge, maxEdge, needsRange);
+      currentMarkings = buildMarkings(best, work, el.markingDirection.value, markingOffset);
+      el.markingNote.textContent = `おすすめ案の割付位置から、実際にけがく位置を${el.markingDirection.value === 'left' ? '左' : '右'}へ${mm(markingOffset)}ずらして表示します。1行に2箇所分を並べています。`;
       renderMarkings(currentMarkings);
 
       el.candidateRows.innerHTML = '';
@@ -1063,9 +1233,9 @@
           <td data-label="定尺">${candidate.full}枚</td>
           <td data-label="右端">${mm(candidate.rightEdge)}</td>
           <td data-label="必要枚数">${candidate.requiredSheets}枚</td>
-          <td data-label="キャップ">${candidate.capCount}個</td>
-          <td class="hide-sm" data-label="理想差">${mm(candidate.diff)}</td>
-          <td data-label="判定"><span class="badge ${candidate.inRange ? '' : 'warn'}">${candidate.inRange ? 'OK' : '範囲外'}</span></td>
+          ${isKakunami ? '' : `<td data-label="キャップ">${candidate.capCount}個</td>`}
+          <td class="hide-sm" data-label="${material.wavePitch ? '均等差' : '理想差'}">${mm(candidate.diff)}</td>
+          <td data-label="判定"><span class="badge ${isKakunami || candidate.inRange ? '' : 'warn'}">${isKakunami || candidate.inRange ? 'OK' : '範囲外'}</span></td>
         `;
         el.candidateRows.append(row);
       });
@@ -1077,23 +1247,26 @@
       ));
 
       return [
-        '屋根材 端部指定割付計算',
+        '割付プログラム',
+        `使用材料: ${selectedMaterial().name}（${selectedMaterial().note}）`,
         `屋根横幅: ${mm(numberOf(el.roofWidth))}`,
         `働き幅: ${mm(numberOf(el.workWidth))}`,
+        `けがき: ${el.markingDirection.value === 'left' ? '左へ' : '右へ'}${mm(numberOf(el.markingOffset))}`,
         `固定条件: ${el.fixedEdgeMode.options[el.fixedEdgeMode.selectedIndex].textContent}${el.fixedEdgeMode.value === 'none' ? '' : ` ${mm(numberOf(el.fixedEdge))}`}`,
         `おすすめ端幅: ${el.bestEdge.textContent}`,
         `中央: ${el.bestFull.textContent}`,
         `必要枚数: ${el.bestRequired.textContent}（${el.edgeSheetNote.textContent}）`,
-        `キャップ数: ${el.bestCaps.textContent}`,
+        ...(selectedMaterial() === materials.kakunami ? [] : [`キャップ数: ${el.bestCaps.textContent}`]),
         `${el.formula.textContent}`,
         '',
-        'けがき寸法一覧（割付位置 + 25mm）',
+        `けがき寸法一覧（割付位置から${el.markingDirection.value === 'left' ? '左へ' : '右へ'}${mm(numberOf(el.markingOffset))}）`,
         ...markingText
       ].join('\n');
     }
 
     document.querySelectorAll('input, select').forEach((input) => {
       const update = () => {
+        if (input === el.material) applyMaterialDefaults();
         el.copyStatus.textContent = '';
         saveInputs();
         render();
@@ -1107,6 +1280,7 @@
       Object.entries(defaults).forEach(([key, value]) => {
         el[key].value = value;
       });
+      syncMaterialUi();
       saveInputs();
       el.copyStatus.textContent = '';
       render();
@@ -1132,6 +1306,7 @@
     }
 
     loadSavedInputs();
+    syncMaterialUi();
     render();
   </script>
 </body>
